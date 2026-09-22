@@ -1,0 +1,8 @@
+# Robots.txt for Nam Nilam WhatsApp AI (wa.namnilam.com)
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /api/
+
+# Sitemap Location
+Sitemap: https://wa.namnilam.com/sitemap.xml

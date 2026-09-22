@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#F1F6F3] text-slate-900 antialiased font-sans;
+    background-image: 
+      radial-gradient(at 15% 15%, rgba(223, 186, 115, 0.08) 0px, transparent 45%),
+      radial-gradient(at 85% 25%, rgba(182, 222, 196, 0.25) 0px, transparent 50%),
+      radial-gradient(at 50% 90%, rgba(213, 230, 218, 0.3) 0px, transparent 60%);
+    background-attachment: fixed;
+  }
+}
+
+/* Custom gold gradient utility */
+.gradient-gold {
+  background: linear-gradient(135deg, #dfba73 0%, #c5a25d 50%, #9e7b39 100%);
+}
+
+.text-gold {
+  background: linear-gradient(135deg, #dfba73 0%, #c5a25d 50%, #9e7b39 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Custom WhatsApp style chat background pattern */
+.wa-pattern {
+  background-color: #ECE5DD;
+  background-image: radial-gradient(#D5CFC7 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+/* Glassmorphism utility */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(190, 217, 198, 0.6);
+}
+
+/* Custom laser animation */
+@keyframes qrLaser {
+  0% {
+    top: 5%;
+    opacity: 0.8;
+  }
+  50% {
+    top: 90%;
+    opacity: 1;
+  }
+  100% {
+    top: 5%;
+    opacity: 0.8;
+  }
+}
+
+.animate-laser {
+  animation: qrLaser 2.2s ease-in-out infinite;
+}
