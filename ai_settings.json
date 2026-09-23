@@ -1,5 +1,5 @@
 {
-  "enabled": true,
+  "enabled": false,
   "businessName": "Nam Nilam Realty",
   "instructions": "Politely answer customer questions about project details, plot availability, and pricing starting from ₹18.5 Lakhs. Offer free weekend site visits.",
   "description": "DTCP & RERA approved residential plots and villa projects.",

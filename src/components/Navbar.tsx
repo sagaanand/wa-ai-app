@@ -176,11 +176,12 @@ export const Navbar: React.FC = () => {
         {/* Right: Primary WhatsApp CTA, Sign In & Mobile Toggle */}
         <div className="flex items-center gap-2 sm:gap-3">
           <Link
-            to="/app/login"
-            className="hidden sm:inline-flex items-center text-xs sm:text-sm font-bold text-slate-700 hover:text-namnilam-900 px-3 py-2 rounded-xl hover:bg-palegreen-100/70 transition"
+            to="/app"
+            className="hidden sm:inline-flex items-center text-xs sm:text-sm font-bold text-namnilam-950 hover:text-namnilam-800 px-3.5 py-2 rounded-xl bg-white border border-palegreen-300 shadow-2xs hover:bg-palegreen-50 transition"
           >
-            Sign In
+            WhatsApp Web
           </Link>
+
 
           <a
             href={WHATSAPP_CHAT_URL}
@@ -330,11 +331,11 @@ export const Navbar: React.FC = () => {
           {/* Direct CTA */}
           <div className="pt-2 flex flex-col gap-2.5">
             <Link
-              to="/app/login"
+              to="/app"
               onClick={closeMenus}
               className="w-full flex items-center justify-center py-2.5 rounded-xl border border-palegreen-300 text-namnilam-900 font-bold text-sm bg-palegreen-50 hover:bg-palegreen-100 transition"
             >
-              Sign In to Workspace
+              Open WhatsApp Web AI
             </Link>
 
             <a

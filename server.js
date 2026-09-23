@@ -64,6 +64,28 @@ let aiSettings = loadJson(AI_SETTINGS_FILE, {
     'Politely answer questions about project details, plot availability, and pricing starting from ₹18.5 Lakhs. Offer free weekend site visits.',
 });
 
+// Helper: Sync chat recency & lastMessage from messagesMap on startup
+const syncChatRecencyAndLastMessages = () => {
+  for (const c of chats) {
+    const msgs = messagesMap[c.id];
+    if (Array.isArray(msgs) && msgs.length > 0) {
+      const last = msgs[msgs.length - 1];
+      if (last && last.text) {
+        c.lastMessage = last.text;
+        c.lastMessageTime = last.timestamp || c.lastMessageTime;
+        c.rawTime = last.rawTime || c.rawTime || 0;
+      }
+    }
+  }
+
+  // Sort chats: chats with recent messages first
+  chats.sort((a, b) => (b.rawTime || 0) - (a.rawTime || 0));
+  saveJson(CHATS_FILE, chats);
+};
+
+syncChatRecencyAndLastMessages();
+
+
 // Format Indian phone number for display
 const formatPhoneNumber = (jid) => {
   if (!jid) return '';
@@ -241,25 +263,100 @@ async function startWhatsAppSocket() {
 
     // Handle Initial History Sync (When WhatsApp Web connects and syncs chats)
     sock.ev.on('messaging-history.set', ({ chats: historyChats, contacts: historyContacts, messages: historyMessages }) => {
-      console.log(`[WhatsApp] History sync received: ${historyChats?.length || 0} chats, ${historyMessages?.length || 0} messages`);
+      console.log(`[WhatsApp] History sync received: ${historyChats?.length || 0} chats, ${historyContacts?.length || 0} contacts, ${historyMessages?.length || 0} messages`);
+      
+      // 1. Build contact phonebook name map
+      const contactNamesMap = {};
+      if (Array.isArray(historyContacts)) {
+        for (const ct of historyContacts) {
+          if (!ct.id) continue;
+          const name = ct.name || ct.notify || ct.verifiedName;
+          if (name) contactNamesMap[ct.id] = name;
+        }
+      }
+
+      // 2. Process and Store Historical Messages
+      if (Array.isArray(historyMessages)) {
+        for (const m of historyMessages) {
+          if (!m.message) continue;
+          const remoteJid = m.key?.remoteJid;
+          if (!remoteJid || remoteJid.endsWith('@g.us') || remoteJid === 'status@broadcast') continue;
+
+          const text =
+            m.message.conversation ||
+            m.message.extendedTextMessage?.text ||
+            m.message.imageMessage?.caption ||
+            '';
+          if (!text.trim()) continue;
+
+          const isFromMe = Boolean(m.key?.fromMe);
+          const tsSeconds = typeof m.messageTimestamp === 'number'
+            ? m.messageTimestamp
+            : (m.messageTimestamp?.low || Math.floor(Date.now() / 1000));
+          const timeString = new Date(tsSeconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+          const msgObj = {
+            id: m.key.id || `hist_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            conversationId: remoteJid,
+            sender: isFromMe ? 'human' : 'customer',
+            text: text.trim(),
+            timestamp: timeString,
+            rawTime: tsSeconds,
+            status: 'read',
+          };
+
+          if (!messagesMap[remoteJid]) messagesMap[remoteJid] = [];
+          if (!messagesMap[remoteJid].some((x) => x.id === msgObj.id)) {
+            messagesMap[remoteJid].push(msgObj);
+          }
+        }
+
+        // Sort messages inside each chat chronologically
+        for (const jid in messagesMap) {
+          messagesMap[jid].sort((a, b) => (a.rawTime || 0) - (b.rawTime || 0));
+        }
+        saveJson(MSGS_FILE, messagesMap);
+      }
+
+      // 3. Process Chats and link lastMessage + contactName
       if (Array.isArray(historyChats)) {
         for (const c of historyChats) {
           if (!c.id || c.id.endsWith('@g.us') || c.id === 'status@broadcast') continue;
           const contactPhone = formatPhoneNumber(c.id);
-          const contactName = c.name || contactPhone;
+          const contactName = contactNamesMap[c.id] || c.name || contactPhone;
+          const chatMsgs = messagesMap[c.id];
+          const lastMsg = Array.isArray(chatMsgs) && chatMsgs.length > 0 ? chatMsgs[chatMsgs.length - 1] : null;
+
+          const convTs = c.conversationTimestamp?.low || c.conversationTimestamp || lastMsg?.rawTime || 0;
           const existingIdx = chats.findIndex((x) => x.id === c.id);
+
+          const chatEntry = {
+            id: c.id,
+            contactName,
+            contactPhone,
+            lastMessage: lastMsg ? lastMsg.text : '',
+            lastMessageTime: lastMsg ? lastMsg.timestamp : '',
+            rawTime: convTs,
+            unreadCount: c.unreadCount || 0,
+            isAiMode: true,
+          };
+
           if (existingIdx === -1) {
-            chats.push({
-              id: c.id,
-              contactName,
-              contactPhone,
-              lastMessage: '',
-              lastMessageTime: '',
-              unreadCount: c.unreadCount || 0,
-              isAiMode: true,
-            });
+            chats.push(chatEntry);
+          } else {
+            chats[existingIdx] = {
+              ...chats[existingIdx],
+              contactName: contactNamesMap[c.id] || chats[existingIdx].contactName || contactName,
+              lastMessage: lastMsg ? lastMsg.text : chats[existingIdx].lastMessage,
+              lastMessageTime: lastMsg ? lastMsg.timestamp : chats[existingIdx].lastMessageTime,
+              rawTime: Math.max(chats[existingIdx].rawTime || 0, convTs),
+              unreadCount: c.unreadCount !== undefined ? c.unreadCount : chats[existingIdx].unreadCount,
+            };
           }
         }
+
+        // Sort chats by most recent message/activity
+        chats.sort((a, b) => (b.rawTime || 0) - (a.rawTime || 0));
         saveJson(CHATS_FILE, chats);
       }
     });
@@ -292,7 +389,7 @@ async function startWhatsAppSocket() {
 
     // Handle Incoming / Outgoing Messages
     sock.ev.on('messages.upsert', async ({ messages: newMessages, type }) => {
-      if (type !== 'notify') return;
+      if (type !== 'notify' && type !== 'append') return;
 
       for (const m of newMessages) {
         if (!m.message) continue;
@@ -311,7 +408,10 @@ async function startWhatsAppSocket() {
         const isFromMe = Boolean(m.key.fromMe);
         const contactPhone = formatPhoneNumber(remoteJid);
         const contactName = m.pushName || contactPhone;
-        const timeString = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const tsSeconds = typeof m.messageTimestamp === 'number'
+          ? m.messageTimestamp
+          : (m.messageTimestamp?.low || Math.floor(Date.now() / 1000));
+        const timeString = new Date(tsSeconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         const msgObj = {
           id: m.key.id || `msg_${Date.now()}`,
@@ -319,40 +419,50 @@ async function startWhatsAppSocket() {
           sender: isFromMe ? 'human' : 'customer',
           text: text.trim(),
           timestamp: timeString,
+          rawTime: tsSeconds,
           status: 'read',
         };
 
         // Store message
         if (!messagesMap[remoteJid]) messagesMap[remoteJid] = [];
-        messagesMap[remoteJid].push(msgObj);
+        if (!messagesMap[remoteJid].some((x) => x.id === msgObj.id)) {
+          messagesMap[remoteJid].push(msgObj);
+        }
         saveJson(MSGS_FILE, messagesMap);
 
-        // Update chats list
+        // Update chats list and MOVE TO TOP!
         const existingChatIndex = chats.findIndex((c) => c.id === remoteJid);
+        let chatObj;
         if (existingChatIndex >= 0) {
-          chats[existingChatIndex].lastMessage = text.trim();
-          chats[existingChatIndex].lastMessageTime = timeString;
-          if (contactName && chats[existingChatIndex].contactName === contactPhone) {
-            chats[existingChatIndex].contactName = contactName;
+          chatObj = chats.splice(existingChatIndex, 1)[0];
+          chatObj.lastMessage = text.trim();
+          chatObj.lastMessageTime = timeString;
+          chatObj.rawTime = tsSeconds;
+          if (contactName && (chatObj.contactName === contactPhone || !chatObj.contactName)) {
+            chatObj.contactName = contactName;
           }
-          if (!isFromMe) chats[existingChatIndex].unreadCount = (chats[existingChatIndex].unreadCount || 0) + 1;
+          if (!isFromMe && type === 'notify') {
+            chatObj.unreadCount = (chatObj.unreadCount || 0) + 1;
+          }
         } else {
-          chats.unshift({
+          chatObj = {
             id: remoteJid,
             contactName,
             contactPhone,
             lastMessage: text.trim(),
             lastMessageTime: timeString,
-            unreadCount: isFromMe ? 0 : 1,
+            rawTime: tsSeconds,
+            unreadCount: isFromMe || type === 'append' ? 0 : 1,
             isAiMode: true,
-          });
+          };
         }
+        chats.unshift(chatObj);
         saveJson(CHATS_FILE, chats);
 
         console.log(`[WhatsApp] ${isFromMe ? 'You' : contactName}: "${text}"`);
 
-        // AI ASSISTANT RESPONSE ENGINE
-        if (!isFromMe) {
+        // AI ASSISTANT RESPONSE ENGINE (Only reply for realtime incoming customer messages)
+        if (!isFromMe && type === 'notify') {
           const chat = chats.find((c) => c.id === remoteJid);
           const isChatAiActive = chat ? chat.isAiMode !== false : true;
 
@@ -370,6 +480,7 @@ async function startWhatsAppSocket() {
                   sender: 'ai',
                   text: aiAnswer,
                   timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  rawTime: Math.floor(Date.now() / 1000),
                   isAiReplied: true,
                   status: 'read',
                 };
@@ -377,12 +488,15 @@ async function startWhatsAppSocket() {
                 messagesMap[remoteJid].push(aiMsgObj);
                 saveJson(MSGS_FILE, messagesMap);
 
-                // Update chat snippet
+                // Update chat snippet and move to top
                 const cIdx = chats.findIndex((c) => c.id === remoteJid);
                 if (cIdx >= 0) {
-                  chats[cIdx].lastMessage = aiAnswer;
-                  chats[cIdx].lastMessageTime = aiMsgObj.timestamp;
-                  chats[cIdx].unreadCount = 0;
+                  const c = chats.splice(cIdx, 1)[0];
+                  c.lastMessage = aiAnswer;
+                  c.lastMessageTime = aiMsgObj.timestamp;
+                  c.rawTime = aiMsgObj.rawTime;
+                  c.unreadCount = 0;
+                  chats.unshift(c);
                   saveJson(CHATS_FILE, chats);
                 }
 
@@ -489,8 +603,11 @@ app.post('/api/send-message', async (req, res) => {
 
     const cIdx = chats.findIndex((c) => c.id === chatId);
     if (cIdx >= 0) {
-      chats[cIdx].lastMessage = text.trim();
-      chats[cIdx].lastMessageTime = msgObj.timestamp;
+      const c = chats.splice(cIdx, 1)[0];
+      c.lastMessage = text.trim();
+      c.lastMessageTime = msgObj.timestamp;
+      c.rawTime = Math.floor(Date.now() / 1000);
+      chats.unshift(c);
       saveJson(CHATS_FILE, chats);
     }
 

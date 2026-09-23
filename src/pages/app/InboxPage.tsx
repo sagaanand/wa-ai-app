@@ -26,7 +26,7 @@ import { SEOHead } from '../../components/SEOHead';
 
 export const InboxPage: React.FC = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const {
     conversations,
     activeConversationId,
@@ -34,6 +34,7 @@ export const InboxPage: React.FC = () => {
     activeMessages,
     setActiveConversationId,
     sendMessage,
+    toggleAiMode,
     whatsAppAccount,
     aiSettings,
     updateAiSettings,
@@ -70,6 +71,11 @@ export const InboxPage: React.FC = () => {
     return matchesSearch && matchesFilter;
   });
 
+  const visibleConversations = searchQuery.trim()
+    ? filteredConversations
+    : filteredConversations.slice(0, 100);
+
+
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputText.trim()) return;
@@ -95,11 +101,6 @@ export const InboxPage: React.FC = () => {
     });
     addToast('success', 'AI Assistant knowledge updated successfully!');
     setShowSettingsModal(false);
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/app/login');
   };
 
   const isAiActive = aiSettings.aiEnabled;
@@ -141,12 +142,12 @@ export const InboxPage: React.FC = () => {
 
             {/* Header Action Icons */}
             <div className="flex items-center gap-1.5 text-slate-600">
-              {/* Quick AI status pill in left header */}
+              {/* Master AI status toggle pill */}
               <button
                 type="button"
-                onClick={() => setShowSettingsModal(true)}
-                title="AI Assistant Settings"
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold border shadow-2xs transition active:scale-95 ${
+                onClick={handleToggleMasterAi}
+                title="Click to Toggle Master AI Assistant ON / OFF"
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-extrabold border shadow-2xs transition active:scale-95 cursor-pointer ${
                   isAiActive
                     ? 'bg-[#E7FCE8] text-[#008069] border-[#008069]/40 hover:bg-[#d4f9d6]'
                     : 'bg-[#F0F2F5] text-slate-600 border-slate-300 hover:bg-slate-200'
@@ -157,7 +158,7 @@ export const InboxPage: React.FC = () => {
                     isAiActive ? 'bg-[#25D366] animate-pulse' : 'bg-slate-400'
                   }`}
                 />
-                <span>{isAiActive ? 'AI ON' : 'AI OFF'}</span>
+                <span>{isAiActive ? 'AI BOT: ON' : 'AI BOT: OFF'}</span>
               </button>
 
               {/* Dedicated AI Knowledge Base Training Button */}
@@ -262,7 +263,7 @@ export const InboxPage: React.FC = () => {
                 </div>
               )
             ) : (
-              filteredConversations.map((conv) => {
+              visibleConversations.map((conv) => {
                 const isSelected = conv.id === activeConversationId;
 
                 return (
@@ -332,14 +333,13 @@ export const InboxPage: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Right Corner: AI Settings Pill + Standard Icons */}
-                <div className="flex items-center gap-3">
-                  
-                  {/* Top Corner AI Assistant Status Pill (Click opens Popup!) */}
+                {/* Right Corner: Master AI Toggle, Train AI & Chat Actions */}
+                <div className="flex items-center gap-2 sm:gap-3">
+                  {/* Master AI Assistant Toggle */}
                   <button
                     type="button"
-                    onClick={() => setShowSettingsModal(true)}
-                    title="Click to open AI Assistant Settings"
+                    onClick={handleToggleMasterAi}
+                    title="Click to Toggle Master AI Assistant ON / OFF"
                     className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-extrabold border shadow-2xs transition active:scale-95 cursor-pointer ${
                       isAiActive
                         ? 'bg-[#E7FCE8] text-[#008069] border-[#008069]/40 hover:bg-[#d4f9d6]'
@@ -351,9 +351,36 @@ export const InboxPage: React.FC = () => {
                         isAiActive ? 'bg-[#25D366] animate-pulse' : 'bg-slate-400'
                       }`}
                     />
-                    <span>{isAiActive ? 'AI Assistant ON' : 'AI Assistant OFF'}</span>
-                    <Sliders className="w-3 h-3 text-slate-500 ml-0.5" />
+                    <span>{isAiActive ? 'AI Bot ON' : 'AI Bot OFF'}</span>
                   </button>
+
+                  {/* Dedicated Train AI Knowledge Base Link */}
+                  <button
+                    type="button"
+                    onClick={() => navigate('/app/ai')}
+                    title="Open AI Knowledge Base & Training"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold bg-namnilam-900 text-gold-300 hover:bg-namnilam-950 transition active:scale-95 shadow-2xs"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-gold-400" />
+                    <span className="hidden md:inline">Train AI</span>
+                  </button>
+
+                  {/* Per-Chat Human Takeover / AI Toggle */}
+                  {activeConversation && (
+                    <button
+                      type="button"
+                      onClick={() => toggleAiMode(activeConversation.id)}
+                      title="Toggle AI for this chat"
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-full text-xs font-bold border transition ${
+                        activeConversation.isAiMode
+                          ? 'bg-blue-50 text-blue-700 border-blue-200'
+                          : 'bg-amber-50 text-amber-800 border-amber-200'
+                      }`}
+                    >
+                      <Bot className="w-3.5 h-3.5" />
+                      <span className="hidden lg:inline">{activeConversation.isAiMode ? 'Auto-reply' : 'Human Takeover'}</span>
+                    </button>
+                  )}
 
                   {/* WhatsApp standard header icons */}
                   <button
@@ -685,11 +712,14 @@ export const InboxPage: React.FC = () => {
               <div className="pt-2 flex items-center justify-between border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={handleLogout}
+                  onClick={() => {
+                    setShowSettingsModal(false);
+                    disconnectWhatsApp();
+                  }}
                   className="inline-flex items-center gap-1 text-xs font-bold text-rose-600 hover:text-rose-800"
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span>Log Out</span>
+                  <span>Unlink WhatsApp</span>
                 </button>
 
                 <div className="flex gap-2">

@@ -5,8 +5,7 @@ import { Navbar } from './components/Navbar';
 import { Footer } from './components/Footer';
 import { ConnectModal } from './components/ConnectModal';
 import { AuthProvider } from './context/AuthContext';
-import { WorkspaceProvider } from './context/WorkspaceContext';
-import { ProtectedRoute } from './components/app/ProtectedRoute';
+import { WorkspaceProvider, useWorkspace } from './context/WorkspaceContext';
 import { AppLayout } from './components/app/AppLayout';
 
 // Public Marketing Pages
@@ -24,8 +23,6 @@ import { AboutPage } from './pages/AboutPage';
 import { ContactPage } from './pages/ContactPage';
 
 // Private App Pages
-import { LoginPage } from './pages/app/LoginPage';
-import { SignupPage } from './pages/app/SignupPage';
 import { ConnectWhatsAppPage } from './pages/app/ConnectWhatsAppPage';
 import { InboxPage } from './pages/app/InboxPage';
 import { ContactsPage } from './pages/app/ContactsPage';
@@ -54,14 +51,21 @@ const PublicLayout: React.FC<{
   );
 };
 
+// Smart Controller for /app
+const AppIndex: React.FC = () => {
+  const { whatsAppAccount } = useWorkspace();
+  if (whatsAppAccount.status === 'connected') {
+    return <Navigate to="/app/inbox" replace />;
+  }
+  return <Navigate to="/app/connect" replace />;
+};
+
 // Workspace Shell Layout
 const WorkspaceShell: React.FC = () => {
   return (
-    <ProtectedRoute requireWhatsApp={false}>
-      <AppLayout>
-        <Outlet />
-      </AppLayout>
-    </ProtectedRoute>
+    <AppLayout>
+      <Outlet />
+    </AppLayout>
   );
 };
 
@@ -109,24 +113,17 @@ export const App: React.FC = () => {
             </Route>
 
             {/* ======================================================== */}
-            {/* AUTH & ONBOARDING ROUTES                                 */}
+            {/* DIRECT WHATSAPP ACCESS & ONBOARDING (No login required)   */}
             {/* ======================================================== */}
-            <Route path="/app/login" element={<LoginPage />} />
-            <Route path="/app/signup" element={<SignupPage />} />
-            <Route
-              path="/app/connect"
-              element={
-                <ProtectedRoute requireWhatsApp={false}>
-                  <ConnectWhatsAppPage />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/app/login" element={<Navigate to="/app" replace />} />
+            <Route path="/app/signup" element={<Navigate to="/app" replace />} />
+            <Route path="/app/connect" element={<ConnectWhatsAppPage />} />
 
             {/* ======================================================== */}
-            {/* PRIVATE PRODUCT WORKSPACE ROUTES (AppLayout + Protected) */}
+            {/* WHATSAPP WEB WORKSPACE & AI AUTOMATION ROUTES            */}
             {/* ======================================================== */}
             <Route path="/app" element={<WorkspaceShell />}>
-              <Route index element={<Navigate to="/app/inbox" replace />} />
+              <Route index element={<AppIndex />} />
               <Route path="inbox" element={<InboxPage />} />
               <Route path="contacts" element={<ContactsPage />} />
               <Route path="ai" element={<AIKnowledgePage />} />

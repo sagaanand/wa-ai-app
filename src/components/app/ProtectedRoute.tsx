@@ -12,7 +12,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   requireWhatsApp = false,
 }) => {
-  const { user, isLoading } = useAuth();
+  const { isLoading } = useAuth();
   const { whatsAppAccount } = useWorkspace();
   const location = useLocation();
 
@@ -29,13 +29,8 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // Not logged in -> go to login
-  if (!user) {
-    return <Navigate to="/app/login" state={{ from: location }} replace />;
-  }
-
-  // Logged in, but route requires WhatsApp connected and it is disconnected
-  if (requireWhatsApp && whatsAppAccount.status === 'disconnected' && location.pathname !== '/app/connect') {
+  // Route requires WhatsApp connected and it is disconnected -> go directly to connect QR screen
+  if (requireWhatsApp && whatsAppAccount.status !== 'connected' && location.pathname !== '/app/connect') {
     return <Navigate to="/app/connect" replace />;
   }
 

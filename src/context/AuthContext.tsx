@@ -86,15 +86,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
 
-      // 2. Check active session
+      // 2. Check active session or set default active workspace
       const savedSession = localStorage.getItem(STORAGE_SESSION_KEY);
       if (savedSession) {
         const sessionData = JSON.parse(savedSession);
         if (sessionData.user && sessionData.workspace) {
           setUser(sessionData.user);
           setWorkspace(sessionData.workspace);
+          setIsLoading(false);
+          return;
         }
       }
+
+      // Default active user & workspace: zero barrier, no login required
+      const defaultUser: User = {
+        id: 'usr_default_admin',
+        email: 'admin@namnilam.com',
+        fullName: 'Business Admin',
+        businessName: 'Nam Nilam WhatsApp AI',
+        phone: '+91 97876 00221',
+        workspaceId: 'ws_default_admin',
+        createdAt: new Date().toISOString(),
+      };
+      const defaultWorkspace: Workspace = {
+        id: 'ws_default_admin',
+        name: 'Nam Nilam WhatsApp AI',
+        ownerId: 'usr_default_admin',
+        currency: 'INR',
+        location: 'Tamil Nadu, India',
+        description: 'AI-Powered WhatsApp Automation & Support',
+        createdAt: new Date().toISOString(),
+      };
+      setUser(defaultUser);
+      setWorkspace(defaultWorkspace);
     } catch (e) {
       console.error('Failed to restore auth session:', e);
     } finally {
